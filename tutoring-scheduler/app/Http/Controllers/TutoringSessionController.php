@@ -8,25 +8,36 @@ use Illuminate\Http\Request;
 class TutoringSessionController extends Controller
 {
 public function index(Request $request)
-{
-    // ✅ Allow everyone (Admins, Tutors, Students) to see ALL sessions
-    // This fixes the "Available Sessions" tab for Tutors
-    $query = TutoringSession::with(['tutor', 'booking']);
+    {
+        $query = TutoringSession::with(['tutor', 'booking']);
+        $user = $request->user();
 
-    if ($request->has('tutor_id')) {
-        $query->where('tutor_id', $request->tutor_id);
+        // 🔒 PRIVACY FILTER:
+        // If it's a TUTOR, force the query to only show their sessions
+        if ($user->role === 'tutor') {
+            $tutorProfile = \App\Models\Tutor::where('email', $user->email)->first();
+            if ($tutorProfile) {
+                $query->where('tutor_id', $tutorProfile->id);
+            } else {
+                // If logged in as tutor but has no Tutor Profile, show nothing
+                return []; 
+            }
+        }
+
+        // (Existing filters...)
+        if ($request->has('tutor_id')) {
+            $query->where('tutor_id', $request->tutor_id);
+        }
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $sessions = $query->orderBy('session_date')
+                          ->orderBy('start_time')
+                          ->get();
+
+        return response()->json($sessions);
     }
-
-    if ($request->has('status')) {
-        $query->where('status', $request->status);
-    }
-
-    $sessions = $query->orderBy('session_date')
-                      ->orderBy('start_time')
-                      ->get();
-
-    return response()->json($sessions);
-}
 
     public function store(Request $request)
     {
